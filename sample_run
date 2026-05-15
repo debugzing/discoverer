@@ -1,0 +1,166 @@
+## Sample Run
+[root@demo-engine ~]# ./discover_olvm.py
+
+OLVM 4.5 recovery discovery assistant
+--------------------------------------
+This tool scans surviving KVM hosts and builds a recovery manifest.
+It does not write directly to the Engine PostgreSQL database.
+
+Host candidates found in Engine artifacts:
+  - ol9-kvm
+  - 10.0.93.76
+  - kvm1
+  - 10.0.93.226
+  - ol9-kvm3
+  - kvm2
+  - 10.0.93.29
+  - localhost4
+  - localhost4.localdomain4
+  - 10.0.93.245
+  - 10.0.93.255
+  - 10.0.93.0
+  - 10.0.93.1
+  ... 31 more
+Use these host candidates [Y/n]: n
+Additional hosts or IPs, comma-separated: kvm1, kvm2
+Optional CIDR range(s) to probe for SSH, comma-separated:
+SSH user for remote KVM hosts [root]:
+SSH private key path (blank to use agent/default keys):
+SSH port [22]:
+Use passwordless sudo for host commands [y/N]:
+Parallel host scan workers [8]:
+Per-command timeout seconds [45]:
+Output directory [olvm-recovery-20260515-054004Z]:
+Generate Engine API bootstrap template [Y/n]: Y
+Scanning 2 host(s) with 8 worker(s)...
+  kvm2: complete (0 VM(s))
+  kvm1: complete (3 VM(s))
+
+Discovery complete.
+Manifest: olvm-recovery-20260515-054004Z/olvm-recovery-manifest.json
+Recovery plan: olvm-recovery-20260515-054004Z/olvm-recovery-plan.md
+API bootstrap template: olvm-recovery-20260515-054004Z/engine_api_bootstrap_template.py
+XML artifacts: olvm-recovery-20260515-054004Z/hosts
+
+Next step: review the recovery plan before making changes to a fresh Engine.
+[root@demo-engine ~]# cd olvm-recovery-20260515-054004Z
+[root@demo-engine olvm-recovery-20260515-054004Z]# ls
+engine_api_bootstrap_template.py  hosts  olvm-recovery-manifest.json  olvm-recovery-plan.md
+[root@demo-engine olvm-recovery-20260515-054004Z]# cat olvm-recovery-plan.md
+# OLVM 4.5 Recovery Plan
+
+Generated: `2026-05-15T05:40:55Z`
+
+## Recovery boundary
+
+Do not rebuild the OLVM Engine database by manually inserting rows into PostgreSQL. Use `engine-backup` restore if any valid backup exists. If the Engine DB is completely lost and no backup exists, deploy a fresh Engine, recreate data centers/clusters/hosts/logical networks, then import existing storage domains and VMs through supported OLVM import workflows.
+
+## Backup check
+
+No obvious `engine-backup` files were found in `/var/lib/ovirt-engine-backup` or `/backup`.
+
+## Discovered hosts
+
+| Host | Scan status | Hostname | OS | VMs | Storage metadata files |
+| --- | --- | --- | --- | ---: | ---: |
+| kvm1 | complete | demo-kvm1.subnet404.vcn404.oraclevcn.com | Oracle Linux Server 8.10 | 3 | 1 |
+| kvm2 | complete | demo-kvm2.subnet404.vcn404.oraclevcn.com | Oracle Linux Server 8.10 | 0 | 1 |
+
+## Virtual machines visible from libvirt
+
+| VM | UUID | State | Seen on host(s) | vCPU | Disks | NICs |
+| --- | --- | --- | --- | ---: | ---: | ---: |
+| DemoDB01 | 278a9c64-b91a-4df0-ada5-9488df61ba7d | running | kvm1 | 64 | 2 | 1 |
+| DemoVM | ef739098-5cc2-4fb8-a591-7a8e75f186c9 | running | kvm1 | 16 | 2 | 1 |
+| dhcp-server | 2dff60c9-af3a-45bc-b120-d20dbdaffe9a | running | kvm1 | 16 | 2 | 1 |
+
+## Logical network candidates
+
+| Name / bridge | Seen on hosts | Bridges | Forward modes |
+| --- | --- | --- | --- |
+| ;vdsmdummy; | kvm1, kvm2 | ;vdsmdummy; | bridge |
+| default | kvm1, kvm2 | virbr0 | nat |
+| vdsm-ovirtmgmt | kvm1 | ovirtmgmt | bridge |
+
+## Storage findings
+
+- Storage-domain metadata files: `2`
+- OVF/meta candidate files: `34`
+- Libvirt storage pools: `0`
+
+First storage-domain metadata paths:
+
+- `/rhev/data-center/mnt/192.24.156.2:_nfs_olv__ovirt_oci__block__volume/b22afc50-69ac-4128-8674-f348d344e8c2/dom_md/metadata` on `kvm1`
+- `/rhev/data-center/mnt/192.24.156.2:_nfs_olv__ovirt_oci__block__volume/b22afc50-69ac-4128-8674-f348d344e8c2/dom_md/metadata` on `kvm2`
+
+## Fresh-engine rebuild sequence
+
+1. Try official `engine-backup --mode=restore --scope=all` first if a backup exists.
+2. If there is no backup, deploy a fresh OLVM 4.5 Engine with the same FQDN where possible.
+3. Create the data center and cluster(s) that match the old compatibility level and CPU family.
+4. Recreate logical networks from this report, then add VLAN/bond/bridge details from the per-host command output.
+5. Add hosts one at a time. Use maintenance windows; a host may need VDSM certificate/bootstrap cleanup before it accepts the new Engine.
+6. Attach/import existing storage domains through the Administration Portal or Engine API. Do not initialize or wipe old storage domains.
+7. Import/register VMs and templates from the recovered storage domains. Validate disks, NIC profiles, MAC addresses, boot order, and HA settings.
+8. Recreate users, permissions, quotas, affinity groups, scheduling policies, fencing/PM settings, MAC pools, and external providers manually from other records.
+
+## Generated files
+
+- `vm_xml`: `olvm-recovery-20260515-054004Z/hosts/kvm1/vms/ef739098-5cc2-4fb8-a591-7a8e75f186c9.xml`
+- `vm_xml`: `olvm-recovery-20260515-054004Z/hosts/kvm1/vms/2dff60c9-af3a-45bc-b120-d20dbdaffe9a.xml`
+- `vm_xml`: `olvm-recovery-20260515-054004Z/hosts/kvm1/vms/278a9c64-b91a-4df0-ada5-9488df61ba7d.xml`
+- `network_xml`: `olvm-recovery-20260515-054004Z/hosts/kvm1/networks/5b03c713-df2c-4b20-9458-3c270fe9e5a5.xml`
+- `network_xml`: `olvm-recovery-20260515-054004Z/hosts/kvm1/networks/0fcf232e-172d-4f61-b0e0-72eedb85dd01.xml`
+- `network_xml`: `olvm-recovery-20260515-054004Z/hosts/kvm1/networks/4f86489c-b17a-4cd0-bec3-6044cb865175.xml`
+- `network_xml`: `olvm-recovery-20260515-054004Z/hosts/kvm2/networks/d31e7110-3833-4cc5-9304-71992f97e04a.xml`
+- `network_xml`: `olvm-recovery-20260515-054004Z/hosts/kvm2/networks/fda6e0a0-c9f8-4783-860d-10fda2485cd2.xml`
+[root@demo-engine olvm-recovery-20260515-054004Z]# ls -lR
+.:
+total 320
+-rwxr-x---. 1 root root   6590 May 15 05:40 engine_api_bootstrap_template.py
+drwxr-xr-x. 4 root root     30 May 15 05:40 hosts
+-rw-r--r--. 1 root root 315256 May 15 05:40 olvm-recovery-manifest.json
+-rw-r--r--. 1 root root   3860 May 15 05:40 olvm-recovery-plan.md
+
+./hosts:
+total 0
+drwxr-xr-x. 5 root root 54 May 15 05:40 kvm1
+drwxr-xr-x. 5 root root 54 May 15 05:40 kvm2
+
+./hosts/kvm1:
+total 0
+drwxr-xr-x. 2 root root 150 May 15 05:40 networks
+drwxr-xr-x. 2 root root   6 May 15 05:40 storage-pools
+drwxr-xr-x. 2 root root 150 May 15 05:40 vms
+
+./hosts/kvm1/networks:
+total 12
+-rw-r--r--. 1 root root 348 May 15 05:40 0fcf232e-172d-4f61-b0e0-72eedb85dd01.xml
+-rw-r--r--. 1 root root 160 May 15 05:40 4f86489c-b17a-4cd0-bec3-6044cb865175.xml
+-rw-r--r--. 1 root root 159 May 15 05:40 5b03c713-df2c-4b20-9458-3c270fe9e5a5.xml
+
+./hosts/kvm1/storage-pools:
+total 0
+
+./hosts/kvm1/vms:
+total 40
+-rw-r--r--. 1 root root 13243 May 15 05:40 278a9c64-b91a-4df0-ada5-9488df61ba7d.xml
+-rw-r--r--. 1 root root 12032 May 15 05:40 2dff60c9-af3a-45bc-b120-d20dbdaffe9a.xml
+-rw-r--r--. 1 root root  9434 May 15 05:40 ef739098-5cc2-4fb8-a591-7a8e75f186c9.xml
+
+./hosts/kvm2:
+total 0
+drwxr-xr-x. 2 root root 102 May 15 05:40 networks
+drwxr-xr-x. 2 root root   6 May 15 05:40 storage-pools
+drwxr-xr-x. 2 root root   6 May 15 05:40 vms
+
+./hosts/kvm2/networks:
+total 8
+-rw-r--r--. 1 root root 159 May 15 05:40 d31e7110-3833-4cc5-9304-71992f97e04a.xml
+-rw-r--r--. 1 root root 348 May 15 05:40 fda6e0a0-c9f8-4783-860d-10fda2485cd2.xml
+
+./hosts/kvm2/storage-pools:
+total 0
+
+./hosts/kvm2/vms:
+total 0
